@@ -11,7 +11,8 @@ class App extends React.Component {
 
   state = {
     foodPos: Math.floor(Math.random() * ((COLUMNS * ROWS) - 1)),
-    snake: [{ pos: 0, dir: 68 }]
+    snake: [{ pos: 0, dir: 68 }],
+    route: {}
   }
 
   componentDidMount() {
@@ -27,6 +28,7 @@ class App extends React.Component {
   controller = (event) => {
     if (event.isComposing || ![87, 65, 83, 68, 38, 37, 40, 39].includes(event.keyCode)) return
     this.setState(prev => {
+      if (prev.snake[0].dir !== event.keyCode) prev.route[prev.snake[0].pos] = event.keyCode
       prev.snake[0].dir = event.keyCode
       return prev
     }, () => this.snakeCrawl(this.snakeCrawlTicker))
@@ -46,7 +48,8 @@ class App extends React.Component {
 
   snakeCrawl = (callback = null) => this.setState(prev => {
     const _isDigesting = !!prev.snake.find(({ pos }, i, arr) => i !== arr.length - 1 && pos === arr[arr.length - 1].pos)
-    const crawler = ({ pos, dir }) => {
+    const crawler = ({ pos, dir }, route = {}) => {
+      if (route.hasOwnProperty(pos)) dir = route[pos]
       switch (dir) {
         // UP
         case 38:
@@ -65,7 +68,10 @@ class App extends React.Component {
       }
       return { pos, dir }
     }
-    prev.snake = prev.snake.map((pod, i, arr) => _isDigesting && i === arr.length - 1 ? pod : crawler(pod))
+    prev.snake = prev.snake.map((pod, i, arr) => {
+      if (_isDigesting && i === arr.length - 1) return pod
+      return crawler(pod, i !== 0 ? prev.route : {})
+    })
     return prev
   }, () => {
     clearTimeout(this.snakeCrawlTickerTimeout)
@@ -109,7 +115,7 @@ class App extends React.Component {
                   width: "100%",
                   height: "100%",
                   background: snakeaPodPos[0] === i ? "indigo" : foodPos === i && _isPod ? "red" : foodPos === i ? "yellow" : _isPod ? "black" : ""
-                }}/>
+                }} />
               )
             })
           }
