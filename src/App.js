@@ -2,54 +2,74 @@ import React from 'react';
 
 const COLUMNS = 10
 const ROWS = 10
+const SNAKE_CRAWL_INTERVAL = 500
+const FOOD_SPAWN_INTERVAL = 5000
 
 class App extends React.Component {
 
   spawnFoodTickerTimeout = null
-
   snakeCrawlTickerTimeout = null
 
   state = {
     foodPos: Math.floor(Math.random() * ((COLUMNS * ROWS) - 1)),
     snake: [{ pos: 0, dir: 68 }],
-    route: {}
   }
 
   componentDidMount() {
-    this.spawnFoodTicker()
-    this.snakeCrawlTicker()
+    // Set keyboard listener
     document.addEventListener("keydown", this.controller)
+    // Start food spawner ticker
+    this.spawnFoodTicker()
+    // Start snake crawl ticker
+    this.snakeCrawlTicker()
   }
 
+  // Clear listener
   componentWillUnmount() {
     document.removeEventListener("keydown", this.controller)
   }
 
   controller = (event) => {
+    // W, A, S, D, Arrows (Up, Left, Down, Right)
     if (event.isComposing || ![87, 65, 83, 68, 38, 37, 40, 39].includes(event.keyCode)) return
+    clearTimeout(this.snakeCrawlTickerTimeout)
     this.setState(prev => {
-      if (prev.snake[0].dir !== event.keyCode) prev.route[prev.snake[0].pos] = event.keyCode
       prev.snake[0].dir = event.keyCode
       return prev
     }, () => this.snakeCrawl(this.snakeCrawlTicker))
   }
 
+  // Snake crawl ticker
   snakeCrawlTicker = () => {
     const { foodPos, snake } = this.state
-    if (foodPos === snake[0].pos) this.incerementScore(() => this.spawnFood(this.spawnFoodTicker))
-    const snakeCrawlTickerTimeout = setTimeout(() => this.snakeCrawl(this.snakeCrawlTicker), 500)
+
+    // Check if snake reach / eat the food
+    if (foodPos === snake[0].pos) this.incerementScore()
+    // Check if snake hit its own pods
+    if (snake.find(({ pos }, i, arr) => (i !== 0 && i !== arr.length - 1) && pos === arr[0].pos)) this.handleCollide()
+
+    const snakeCrawlTickerTimeout = setTimeout(() => this.snakeCrawl(this.snakeCrawlTicker), SNAKE_CRAWL_INTERVAL)
     this.snakeCrawlTickerTimeout = snakeCrawlTickerTimeout
   }
 
+  // On collide event handler
+  handleCollide = () => this.setState(prev => Object.assign(prev, { snake: prev.snake.slice(0, 1) }), () => this.spawnFood(this.spawnFoodTicker))
+
+  // Food spawner ticker
   spawnFoodTicker = () => {
-    const spawnFoodTickerTimeout = setTimeout(() => this.spawnFood(this.spawnFoodTicker), 5000)
+    const spawnFoodTickerTimeout = setTimeout(() => this.spawnFood(this.spawnFoodTicker), FOOD_SPAWN_INTERVAL)
     this.spawnFoodTickerTimeout = spawnFoodTickerTimeout
   }
 
   snakeCrawl = (callback = null) => this.setState(prev => {
-    const _isDigesting = !!prev.snake.find(({ pos }, i, arr) => i !== arr.length - 1 && pos === arr[arr.length - 1].pos)
-    const crawler = ({ pos, dir }, route = {}) => {
-      if (route.hasOwnProperty(pos)) dir = route[pos]
+    // List all digested food to prevent pod crawl
+    const disgestedFoodIndex = prev.snake.map(({ pos }) => pos).reduce((prevArr, pos, i, arr) => {
+      if (arr.lastIndexOf(pos) !== i) prevArr.push(i + 1)
+      return prevArr
+    }, [])
+
+    // Modify pod position
+    const crawler = ({ pos, dir }) => {
       switch (dir) {
         // UP
         case 38:
@@ -68,26 +88,36 @@ class App extends React.Component {
       }
       return { pos, dir }
     }
+
+    // Change pod direction
+    const redirect = (pod, prev) => {
+      if (!prev) return pod
+      pod.dir = prev.dir
+      return pod
+    }
+
     prev.snake = prev.snake.map((pod, i, arr) => {
-      if (_isDigesting && i === arr.length - 1) return pod
-      return crawler(pod, i !== 0 ? prev.route : {})
+      // Prevent pod crawl while digesting food
+      if (disgestedFoodIndex.includes(i)) return redirect(pod, arr[i - 1])
+      // Set new pod position and change direction
+      return redirect(crawler(pod), arr[i - 1])
     })
     return prev
-  }, () => {
-    clearTimeout(this.snakeCrawlTickerTimeout)
-    callback && callback()
-  })
+  }, callback)
 
+  // Food spawner
   spawnFood = (callback = null) => this.setState({ foodPos: Math.floor(Math.random() * ((COLUMNS * ROWS) - 1)) }, () => {
     clearTimeout(this.spawnFoodTickerTimeout)
     callback && callback()
   })
 
-  incerementScore = (callback = null) => this.setState(prev => Object.assign(prev, { snake: prev.snake.concat(prev.snake[0]) }), callback)
+  // Add new pod into beginning of snake array (state)
+  // Then spawn new food
+  incerementScore = () => this.setState(prev => Object.assign(prev, { snake: [prev.snake[0]].concat(prev.snake) }), () => this.spawnFood(this.spawnFoodTicker))
 
   render() {
     const { foodPos, snake } = this.state
-    const snakeaPodPos = snake.map(({ pos }) => pos)
+    const snakePodPos = snake.map(({ pos }) => pos)
     return (
       <div style={{
         height: "100vh",
@@ -98,7 +128,9 @@ class App extends React.Component {
         justifyContent: "center",
         alignItems: "center"
       }}>
-        <h3>Score: {snake.length}</h3>
+        <p><b>Control:</b> W, A, S, D, Arrows (Up, Left, Down, Right)</p>
+        <a href="https://github.com/kautsarady/snek">Source Code</a>
+        <h3>Score: {(snake.length - 1) * 100}</h3>
         <div style={{
           width: "60vw",
           height: "80vh",
@@ -107,15 +139,27 @@ class App extends React.Component {
           gridTemplateColumns: `repeat(${COLUMNS}, 1fr)`
         }}>
           {
+            // Create grid
             new Array(COLUMNS * ROWS).fill(0).map((_, i) => {
-              const _isPod = snakeaPodPos.includes(i)
+              const _isPod = snakePodPos.includes(i)
               return (
-                <div id={i} onClick={this.handleClick} style={{
+                <div key={i} id={i} onClick={this.handleClick} style={{
                   border: "1px solid black",
                   width: "100%",
                   height: "100%",
-                  background: snakeaPodPos[0] === i ? "indigo" : foodPos === i && _isPod ? "red" : foodPos === i ? "yellow" : _isPod ? "black" : ""
-                }} />
+                  background:
+                  // Head color
+                  snakePodPos[0] === i ? "cyan" :
+                  // Food and pod intersect
+                  foodPos === i && _isPod ? "red" :
+                  // Food color
+                  foodPos === i ? "yellow" :
+                  // Pod color
+                  _isPod ? "orange" : "",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center"
+                }}/>
               )
             })
           }
