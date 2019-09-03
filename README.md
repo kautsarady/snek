@@ -1,2 +1,2 @@
 ## demo
-[this](https://kave-snek.herokuapp.com)
+[this](https://kave-snake.herokuapp.com/)
