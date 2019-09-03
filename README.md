@@ -1,2 +1,2 @@
 ## demo
-[this](https://kave-gamengine.firebaseapp.com)
+[this](https://kave-snek.herokuapp.com)
